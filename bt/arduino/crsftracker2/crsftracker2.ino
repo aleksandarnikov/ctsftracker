@@ -8,6 +8,7 @@
 
 #include "BluetoothSerial.h"
 #include <Metro.h>
+#include <ESP32Servo.h>
 
 
 BluetoothSerial SerialBT;
@@ -57,6 +58,12 @@ Metro loop20hz = Metro(50); // 20hz loop
 Metro loop50hz = Metro(20); // 50hz loop
 Metro loopDisplay = Metro(5000); // 1hz loop
 
+Servo servo1;
+Servo servo2;
+
+int servo1Pin = 2;
+int servo2Pin = 18;
+
 #define PAN_MAXPWM 1500     //max pan servo pwm value
 #define PAN_MAXANGLE 90     //Max angle clockwise (on the right) relative to PAN_MAXPWM. 
 #define PAN_MINPWM 1500     //min pan servo pwm valuemin pan servo pwm value
@@ -68,6 +75,9 @@ Metro loopDisplay = Metro(5000); // 1hz loop
 #define TILT_MINANGLE 0     //minimum tilt angle. Considering 0 is facing toward, a -10 value would means we can tilt 10° down.
 
 #define VOLTAGE_RATIO 600   // Default multiplier for battery voltage reading * 100. This can eb adjustd later from the menu.
+
+#define MAGDEC -600  // Your local Magnetic Declination in radian. Get it from here: http://magnetic-declination.com/  then convert it in milliradian: http://www.wolframalpha.com/input/?i=%280%C2%B0+5%27%29+in+radians 
+                     // only needed if using internal compass.
 
 //Configuration stored in EEprom
 struct config_t // 28 bytes
@@ -147,6 +157,12 @@ void setup() {
   loop20hz.reset();
   loop50hz.reset();
   loopDisplay.reset();
+
+  servo1.setPeriodHertz(50);      // Standard 50hz servo
+  servo2.setPeriodHertz(50);      // Standard 50hz servo
+
+  servo1.attach(servo1Pin, 1000, 2000);
+  servo2.attach(servo2Pin, 1000, 2000);
 }
 
 void sendCodeToFC(int code) {
@@ -204,6 +220,7 @@ void extractHomeData(int id, char c[]) {
     home_magx = readUINT16(c, 12);
     home_magy = readUINT16(c, 14);
     home_magz = readUINT16(c, 16);
+    retrieveMag();
   }
 
   if (id == 110) {
@@ -290,6 +307,10 @@ void loop() {
 
   if (loop50hz.check() == 1) {
     //update servos
+//    Serial.println(home_bearing / 2);
+    servo2.write(home_bearing / 2);
+    servo1.write(90);
+    servo2.write(90);
     if((home_dist / 100) > DONTTRACKUNDER) {
         //servoPathfinder(Bearing,Elevation); // refresh servo 
     }
@@ -399,27 +420,26 @@ void servoPathfinder(int angle_b, int angle_a){   // ( bearing, elevation )
 }
 
 
-//void retrieve_mag() {
-//    // Retrieve the raw values from the compass (not scaled).
-//    MagnetometerRaw raw = compass.ReadRawAxis();
-//    // Retrieved the scaled values from the compass (scaled to the configured scale).
-//    MagnetometerScaled scaled = compass.ReadScaledAxis();
-//    //
-//    // Calculate heading when the magnetometer is level, then correct for signs of axis.
-//    float heading = atan2(scaled.YAxis, scaled.XAxis);
-//
-//    // Once you have your heading, you must then add your ‘Declination Angle’, which is the ‘Error’ of the magnetic field in your location.
-//    // Find yours here: http://www.magnetic-declination.com/
-//
-//    float declinationAngle = MAGDEC / 1000; 
-//    heading += declinationAngle;
-//    
-//    // Correct for when signs are reversed.
-//    if (heading < 0)    heading += 2*PI;
-//    
-//    // Check for wrap due to addition of declination.
-//    if (heading > 2*PI) heading -= 2*PI;
-//    
-//    // Convert radians to degrees for readability.
-//    home_bearing = (int)round(heading * 180/M_PI);
-//}
+void retrieveMag() {
+
+    float heading = atan2(home_magy, home_magx);
+
+    // Once you have your heading, you must then add your ‘Declination Angle’, which is the ‘Error’ of the magnetic field in your location.
+    // Find yours here: http://www.magnetic-declination.com/
+
+    float declinationAngle = MAGDEC / 1000; 
+    heading += declinationAngle;
+    
+    // Correct for when signs are reversed.
+    if (heading < 0) {
+      heading += 2*PI;
+    }
+    
+    // Check for wrap due to addition of declination.
+    if (heading > 2*PI) {
+      heading -= 2*PI;
+    }
+    
+    // Convert radians to degrees for readability.
+    home_bearing = (int)round(heading * 180/M_PI);
+}

@@ -167,6 +167,9 @@ void debugData() {
     Serial.print(" h_magz: ");
     Serial.print(home_magz);    
 
+    Serial.print(" h_bearing: ");
+    Serial.print(home_bearing);   
+
     Serial.print(" h_vbat: ");
     Serial.print(home_vbat);   
     
